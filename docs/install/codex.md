@@ -1,6 +1,6 @@
 # Install in Codex (command-line or app)
 
-**Status:** see `ROUTES.md`. The headless command-line route was tested by us on a Mac on 2026-11-18 with the skill in a project-level `.agents/skills` folder. The Codex app is untested.
+**Status:** see `ROUTES.md`. The command line on a Mac was tested by us on 2026-11-18/19, in headless runs with the skill in a project's `.agents/skills/` folder (both share actions, both sample projects). The personal install, interactive use and the Codex app are untested.
 
 ## Steps
 

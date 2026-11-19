@@ -1,6 +1,6 @@
 # Install in Claude Code (command-line or desktop Code tab)
 
-**Status:** see `ROUTES.md`. The headless command-line route was tested by us on a Mac on 2026-11-18 with the skill in a project-level skills folder; the steps below for a personal install are documented but untested.
+**Status:** see `ROUTES.md`. The command line on a Mac was tested by us on 2026-11-18/19, in headless runs with the skill in a project's `.claude/skills/` folder (both share actions, both sample projects). The personal install in step 2, interactive use and the desktop Code tab are documented but untested.
 
 ## Steps
 
