@@ -1,9 +1,13 @@
 # Changelog
 
+## 0.1.2 — 2026-11-19
+
+- `QUICK-GUIDE.pdf` replaced by a one-page plain version: a heading, a sentence and the exact line to type for setup, share, update, a received zip and feedback. Its source is now `docs/guide/quick-guide.html` (built with `weasyprint`).
+
 ## 0.1.1 — 2026-11-19
 
 - The zip can be handed straight to an assistant. `INSTALL.md` tells the assistant what to do in each case: a first-time install into the personal skills folder (with the owner's yes), a copy already installed (same, older or newer), and a chat that cannot see the computer.
-- `QUICK-GUIDE.pdf`, a two-page guide for the owner, travels in the zip. Its source is `docs/guide/quick-guide.md`.
+- `QUICK-GUIDE.pdf`, a two-page guide for the owner, travels in the zip. Its source was `docs/guide/quick-guide.md` (replaced in 0.1.2).
 
 ## 0.1.0 — 2026-11-19
 

@@ -2,7 +2,7 @@
 
 Read this when a person gave you `share-project` as a zip or a folder, instead of you finding it already installed. The person is probably not technical. Use plain words, ask one thing at a time, and never ask them to use a terminal. They decide; this page only tells you what usually helps.
 
-`QUICK-GUIDE.pdf` in this folder is a two-page guide written for the person. Tell them it exists and offer to open it.
+`QUICK-GUIDE.pdf` in this folder is a one-page guide written for the person. Tell them it exists and offer to open it.
 
 ## 1. Work out which case you are in
 
