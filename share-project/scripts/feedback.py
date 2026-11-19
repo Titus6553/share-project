@@ -18,7 +18,7 @@ import os
 import sys
 from urllib.parse import quote
 
-REPOSITORY = "OWNER/share-project"   # fixed at release; see references/update-and-feedback.md
+REPOSITORY = "Titus6553/share-project"   # fixed at release; see references/update-and-feedback.md
 FEEDBACK_EMAIL = "the address Ben gave you with the skill"
 CHOICES = {
     "app": ["claude-desktop-chat", "claude-desktop-cowork", "claude-desktop-code", "claude-code-terminal",

@@ -29,7 +29,7 @@ import urllib.error
 import urllib.request
 import zipfile
 
-REPOSITORY = "OWNER/share-project"   # fixed at release; see references/update-and-feedback.md
+REPOSITORY = "Titus6553/share-project"   # fixed at release; see references/update-and-feedback.md
 SKILL = "share-project"
 MAX_ZIP = 10 * 1024 * 1024
 MAX_FILES = 200
