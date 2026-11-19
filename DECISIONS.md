@@ -5,3 +5,13 @@ One line per builder choice the design left open. Newest at the bottom.
 - 2026-11-18 · Skill name `share-project`; repository folder `share-project-skill`. The name holds no vendor name.
 - 2026-11-18 · Licence MIT.
 - 2026-11-18 · Helpers are Python 3 standard library only (3.9 or newer); no third-party package, no network except `update_fetch.py`. Where no Python runs, the skill reports each helper step as a check that could not run, and stops before delivery.
+- 2026-11-18 · Pack format `share-pack/1`: fixed page names and headings (`references/pack-format.md`) so `scripts/check_pack.py` can check them; the pilot's contract is `pilot/CONTRACT.md`.
+- 2026-11-18 · Stand-ins: 8 invented rows per sheet or table by default; text becomes `standin-<column>-<n>`, emails `standin-<n>@example.invalid`, phones `000-555-01nn`; numbers keep their rough size and the order of same-size columns (a price stays above its cost); dates stay inside the months the original covers and keep their cell type. Short category labels (department or stage names) are kept unless the column name looks personal, and listed for the owner. Stand-ins are realistic enough to run, not per-category; checks use deliberately chosen rows.
+- 2026-11-18 · Screening exempts only the stand-in shapes above. Reserved example domains and the 555-01xx range are not exempt (the retired skill exempted them; an agent can paste real data in those shapes).
+- 2026-11-18 · Size limits: a pack at most 25 MiB; `START-HERE.md` at most 16 KiB; any single file over 1 MiB is left out as too large to check; at most 5,000 rows are read from a data file to describe its columns.
+- 2026-11-18 · XML in workbooks is read with the standard library parser (its expat build refuses entity-expansion attacks); inputs are size-capped before parsing.
+- 2026-11-18 · Update action: download and show only. Publisher authentication is not implemented in 0.1.0 (spec §7.5), so `update_fetch.py` stages and lists changes and installs nothing; the owner installs through the app's own route.
+- 2026-11-18 · `REPOSITORY` in `scripts/update_fetch.py` and `scripts/feedback.py` is the placeholder `OWNER/share-project` until the publisher creates the public repository.
+- 2026-11-18 · Feedback takes values only from fixed lists (`feedback.py --choices`); no free-text option exists, so nothing from a project can enter a report.
+- 2026-11-18 · Screenshots: not needed for version 0.1.0. Both pilot rebuilds passed from the cleaned templates, styles and exact rules; images stay left out as unverifiable.
+- 2026-11-18 · Pilot isolation: Claude sessions run with `--safe-mode` and the shell sandbox; Codex sessions with `--ignore-user-config --ignore-rules` and the workspace sandbox (`tools/pilot_session.sh`).

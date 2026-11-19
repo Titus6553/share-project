@@ -22,6 +22,7 @@ name looks personal; the result lists every column whose labels were kept so the
 Exit 0 = written; 1 = left out (reason printed); 2 = usage error."""
 
 import csv
+import datetime
 import json
 import os
 import random
@@ -49,6 +50,18 @@ class LeftOut(Exception):
     pass
 
 
+class XDate(float):
+    """A spreadsheet cell holding a date as a day number with a date format (how Excel stores dates)."""
+
+
+EPOCH = datetime.date(1899, 12, 30)
+DATE_FORMAT_IDS = set(range(14, 23)) | {45, 46, 47}
+
+
+def xdate_month(v):
+    return (EPOCH + datetime.timedelta(days=int(v))).strftime("%Y-%m")
+
+
 def profile(name, values):
     """Describe a column without keeping any of its values except short category labels."""
     vals = [v for v in values if v not in (None, "")]
@@ -59,6 +72,9 @@ def profile(name, values):
     p = {"name": name, "blanks": blanks > 0, "personal": bool(PERSONAL_HINT.search(name or "")) or looks_like_names}
     if not texts:
         p["type"] = "text"
+    elif all(isinstance(v, XDate) for v in vals):
+        p.update(type="xdate", months=sorted({xdate_month(v) for v in vals}),
+                 time=any(float(v) % 1 for v in vals))
     elif all(isinstance(v, (int, float)) or NUM.match(t) for v, t in zip(vals, texts)):
         decimals = max((len(t.split(".")[1]) for t in texts if "." in t), default=0)
         mags = sorted(abs(float(t)) for t in texts)
@@ -110,6 +126,10 @@ def invent(p, n, rng, rows, factor=5.0):
         return round(v, p["decimals"]) if p["decimals"] else int(v)
     if p["type"] == "month":
         return p["months"][n % len(p["months"])]
+    if p["type"] == "xdate":
+        y, m = map(int, p["months"][n % len(p["months"])].split("-"))
+        day = (datetime.date(y, m, 1 + (n * 7) % 27) - EPOCH).days
+        return XDate(day + (0.375 if p.get("time") else 0))
     if p["type"] == "date":
         month = p["months"][n % len(p["months"])]
         d = f"{month}-{1 + (n * 7) % 27:02d}"
@@ -164,6 +184,19 @@ def read_xlsx(path):
         if "xl/sharedStrings.xml" in z.namelist():
             for si in ET.fromstring(z.read("xl/sharedStrings.xml")).findall(f"{{{NS}}}si"):
                 shared.append("".join(t.text or "" for t in si.iter(f"{{{NS}}}t")))
+        date_styles = set()
+        if "xl/styles.xml" in z.namelist():
+            st = ET.fromstring(z.read("xl/styles.xml"))
+            custom = {}
+            fmts = st.find(f"{{{NS}}}numFmts")
+            for f in (fmts if fmts is not None else []):
+                code = re.sub(r'"[^"]*"|\[[^\]]*\]', "", f.get("formatCode", "")).lower()
+                custom[int(f.get("numFmtId"))] = bool(re.search(r"[dy]", code) or re.search(r"m{3,}", code))
+            xfs = st.find(f"{{{NS}}}cellXfs")
+            for i, xf in enumerate(xfs if xfs is not None else []):
+                fid = int(xf.get("numFmtId", "0"))
+                if fid in DATE_FORMAT_IDS or custom.get(fid):
+                    date_styles.add(str(i))
         sheets = []
         for sh in wb.find(f"{{{NS}}}sheets"):
             target = targets[sh.get(RID)]
@@ -180,7 +213,9 @@ def read_xlsx(path):
                         val = shared[int(v.text)]
                     elif v is not None:
                         val = float(v.text) if t in (None, "n") and NUM.match(v.text or "") else v.text
-                        if isinstance(val, float) and val.is_integer():
+                        if isinstance(val, float) and c.get("s") in date_styles:
+                            val = XDate(val)
+                        elif isinstance(val, float) and val.is_integer():
                             val = int(val)
                     else:
                         val = ""
@@ -208,7 +243,9 @@ def write_xlsx(path, sheets):
                 if v is None or v == "":
                     continue
                 ref = f"{col(c)}{r}"
-                if isinstance(v, (int, float)) and not isinstance(v, bool):
+                if isinstance(v, XDate):
+                    cells.append(f'<c r="{ref}" s="1"><v>{float(v):g}</v></c>')
+                elif isinstance(v, (int, float)) and not isinstance(v, bool):
                     cells.append(f'<c r="{ref}"><v>{v}</v></c>')
                 else:
                     cells.append(f'<c r="{ref}" t="inlineStr"><is><t>{escape(str(v))}</t></is></c>')
@@ -220,17 +257,23 @@ def write_xlsx(path, sheets):
     ct = ['<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
           '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
           '<Default Extension="xml" ContentType="application/xml"/>'
-          '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>']
+          '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+          '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>']
     wbs, wbr = [], []
     for i, (name, _, _) in enumerate(sheets, start=1):
         ct.append(f'<Override PartName="/xl/worksheets/sheet{i}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>')
         wbs.append(f'<sheet name="{escape(name, {chr(34): "&quot;"})}" sheetId="{i}" r:id="rId{i}"/>')
         wbr.append(f'<Relationship Id="rId{i}" Type="{R}/worksheet" Target="worksheets/sheet{i}.xml"/>')
+    wbr.append(f'<Relationship Id="rId{len(sheets) + 1}" Type="{R}/styles" Target="styles.xml"/>')
     ct.append("</Types>")
     parts = {
         "[Content_Types].xml": "".join(ct),
         "_rels/.rels": f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="{PR}"><Relationship Id="rId1" Type="{R}/officeDocument" Target="xl/workbook.xml"/></Relationships>',
         "xl/workbook.xml": f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="{NS}" xmlns:r="{R}"><sheets>{"".join(wbs)}</sheets></workbook>',
+        "xl/styles.xml": (f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="{NS}">'
+                          '<fonts count="1"><font/></fonts><fills count="1"><fill/></fills><borders count="1"><border/></borders>'
+                          '<cellStyleXfs count="1"><xf/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0"/>'
+                          '<xf numFmtId="14" applyNumberFormat="1"/></cellXfs></styleSheet>'),
         "xl/_rels/workbook.xml.rels": f'<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="{PR}">{"".join(wbr)}</Relationships>',
     }
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:

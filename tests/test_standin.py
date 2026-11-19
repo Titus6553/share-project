@@ -49,6 +49,17 @@ class StandIns(unittest.TestCase):
         self.assertEqual(shape(src), shape(dst))
         self.no_original_values(dst)
 
+    def test_date_cells_stay_date_cells(self):
+        # Pilot R2: a rebuild tuned to a stand-in with text dates rejected real date-formatted cells.
+        src, dst = os.path.join(self.out, "dates.xlsx"), os.path.join(self.out, "dates-out.xlsx")
+        X = standin.XDate
+        standin.write_xlsx(src, [("Deals", ["delivered_on", "amount"],
+                                  [[X(46025), 10.5], [X(46056), 20.25], [X(46083), 7.0], [X(46090), 8.0]])])
+        res = standin.make(src, dst)
+        self.assertEqual(res["structure"]["sheets"][0]["columns"][0]["type"], "xdate")
+        rows = standin.read_xlsx(dst)[0][1][1:]
+        self.assertTrue(all(isinstance(r[0], X) for r in rows if r and r[0] not in (None, "")))
+
     def test_unsupported_is_left_out(self):
         src = os.path.join(ROOT, "samples", "finance-dashboard", "data", "old_exports.zip")
         with self.assertRaises(standin.LeftOut):
