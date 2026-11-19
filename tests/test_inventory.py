@@ -23,6 +23,17 @@ class InventorySamples(unittest.TestCase):
         for path, kind in expect.items():
             self.assertEqual(self.kind.get(path), kind, path)
 
+    def test_json_with_records_is_data(self):
+        # End review: a small exported JSON of rows at the project root was classed as code and copied.
+        rows = os.path.join(self.project, "sales.json")
+        with open(rows, "w") as f:
+            json.dump([{"customer": "Ada Moreno", "amount": n} for n in range(3)], f)
+        self.assertEqual(inventory.classify("sales.json", rows)[0], "data")
+        settings = os.path.join(self.project, "settings.json")
+        with open(settings, "w") as f:
+            json.dump({"stages": ["Inspection", "Body", "Detail"], "port": 8080}, f)
+        self.assertEqual(inventory.classify("settings.json", settings)[0], "code")
+
     def test_key_names_only(self):
         self.assertEqual(self.res["key_names"][".env"], ["DEALER_FEED_API_KEY", "MAILER_TOKEN", "SMTP_PASSWORD", "REPORT_RECIPIENTS"])
         out = json.dumps(self.res)

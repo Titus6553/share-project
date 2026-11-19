@@ -5,10 +5,13 @@
 """Make a stand-in for a data file.
 
 Usage: python3 standin.py <data-file> <stand-in-file> [--rows N] [--pack <pack-folder>] [--json]
+       python3 standin.py <stand-in-file> --record-only --pack <pack-folder>
 
 With --pack, the stand-in (which must sit under <pack-folder>/project/) is recorded with its
 fingerprint in <pack-folder>/STANDINS.json; check_pack.py accepts a data file only if it is
-recorded there unchanged.
+recorded there unchanged. --record-only re-records a stand-in that was edited after this helper
+made and recorded it (check rows added by hand), without regenerating it; a file never recorded
+is refused.
 
 Supported: .csv, .tsv, .xlsx / .xlsm (read and written with the standard library) and SQLite
 files (.db, .sqlite, .sqlite3). Anything else, or a file that cannot be read, exits 1 with
@@ -38,6 +41,8 @@ PERSONAL_HINT = re.compile(
     r"advisor|tech|manager|user|email|e-mail|phone|mobile|cell|fax|address|street|city|zip|postal|ssn|social|"
     r"dob|birth|licen[cs]e|vin|plate|account|card|iban|routing|pay|salary|wage|income|tax_?id|ip_?addr|note|comment",
     re.I)
+CATEGORY_HINT = re.compile(r"stage|status|state|step|department|dept|category|type|kind|class|group|make|model|"
+                           r"trim|color|colour|segment|channel|source|level|tier|region|location|store|lot", re.I)
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2}(:\d{2})?)?$")
 NUM = re.compile(r"^-?\d+(\.\d+)?$")
 PERSON = re.compile(r"^[A-Z][a-z'\u00e0-\u00ff-]+( [A-Z][a-z'\u00e0-\u00ff-]+){1,3}$")
@@ -67,8 +72,10 @@ def profile(name, values):
     vals = [v for v in values if v not in (None, "")]
     blanks = len(values) - len(vals)
     texts = [str(v) for v in vals]
-    looks_like_names = (len(texts) >= 3 and sum(bool(PERSON.match(t)) for t in texts) >= 0.8 * len(texts)
-                        and len(set(texts)) > 0.5 * len(texts))
+    # Person-shaped values ("Ada Moreno") make a column personal however often they repeat, unless the
+    # column name says it holds categories (a stage called "Front Line" is a label, not a person).
+    looks_like_names = (len(texts) >= 2 and sum(bool(PERSON.match(t)) for t in texts) >= 0.8 * len(texts)
+                        and not CATEGORY_HINT.search(name or ""))
     p = {"name": name, "blanks": blanks > 0, "personal": bool(PERSONAL_HINT.search(name or "")) or looks_like_names}
     if not texts:
         p["type"] = "text"
@@ -302,15 +309,16 @@ def xlsx_standin(src, dst, rows, rng):
 # ---------- SQLite ----------
 
 def sqlite_standin(src, dst, rows, rng):
+    con = None
     try:
         con = sqlite3.connect(f"file:{src}?mode=ro&immutable=1", uri=True)
         tables = con.execute("SELECT name, sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' "
                              "AND sql IS NOT NULL ORDER BY name").fetchall()
     except sqlite3.DatabaseError as e:
+        if con is not None:
+            con.close()
         raise LeftOut(f"not a readable SQLite file ({e.__class__.__name__})")
     report = []
-    if os.path.exists(dst):
-        raise LeftOut("stand-in path already exists")
     out = sqlite3.connect(dst)
     for name, sql in tables:
         cols = [r[1] for r in con.execute(f'PRAGMA table_info("{name}")')]
@@ -351,24 +359,25 @@ def make(src, dst, rows=8, seed=None):
         raise LeftOut("too large to read safely")
     rng = random.Random(seed if seed is not None else 1)
     ext = os.path.splitext(src)[1].lower()
+    makers = {".csv": csv_standin, ".tsv": csv_standin, ".xlsx": xlsx_standin, ".xlsm": xlsx_standin,
+              ".db": sqlite_standin, ".sqlite": sqlite_standin, ".sqlite3": sqlite_standin, ".db3": sqlite_standin}
+    if ext not in makers:
+        raise LeftOut(f"no stand-in maker for '{ext or 'no extension'}' files")
     os.makedirs(os.path.dirname(os.path.abspath(dst)), exist_ok=True)
+    # Written to a temporary file beside the destination and moved into place only when complete,
+    # so a refusal never removes or half-writes a file that was there before.
+    tmp = os.path.join(os.path.dirname(os.path.abspath(dst)), "." + os.path.basename(dst) + ".partial")
+    if os.path.lexists(tmp):
+        os.remove(tmp)
     try:
-        if ext in (".csv", ".tsv"):
-            rep = csv_standin(src, dst, rows, rng)
-        elif ext in (".xlsx", ".xlsm"):
-            rep = xlsx_standin(src, dst, rows, rng)
-        elif ext in (".db", ".sqlite", ".sqlite3", ".db3"):
-            rep = sqlite_standin(src, dst, rows, rng)
-        else:
-            raise LeftOut(f"no stand-in maker for '{ext or 'no extension'}' files")
-    except LeftOut:
-        if os.path.exists(dst):
-            os.remove(dst)
-        raise
+        rep = makers[ext](src, tmp, rows, rng)
+        os.replace(tmp, dst)
     except (UnicodeDecodeError, csv.Error, zipfile.BadZipFile, KeyError, ET.ParseError, ValueError) as e:
-        if os.path.exists(dst):
-            os.remove(dst)
         raise LeftOut(f"could not read it ({e.__class__.__name__})")
+    finally:
+        for leftover in (tmp, tmp + "-journal"):
+            if os.path.lexists(leftover):
+                os.remove(leftover)
     groups = rep.get("sheets") or rep.get("tables") or []
     kept = [f"{g['name']}.{c['name']}" for g in groups for c in g["columns"] if c.get("labels")]
     personal = [f"{g['name']}.{c['name']}" for g in groups for c in g["columns"] if c["personal"]]
@@ -391,9 +400,43 @@ def record(pack, standin_path):
         json.dump(data, f, indent=1)
 
 
+def record_edited(pack, standin_path):
+    """Re-record a stand-in edited after standin.py made it (for example, check rows added).
+    Only a file already recorded in STANDINS.json can be re-recorded; nothing is regenerated."""
+    rec = os.path.join(pack, "STANDINS.json")
+    inner = os.path.relpath(os.path.abspath(standin_path), os.path.join(os.path.abspath(pack), "project"))
+    try:
+        with open(rec) as f:
+            known = {e["path"] for e in json.load(f).get("standins", [])}
+    except (OSError, ValueError, KeyError, TypeError):
+        known = set()
+    if inner not in known:
+        raise LeftOut("only a stand-in that standin.py made and recorded can be re-recorded")
+    if os.path.islink(standin_path) or not os.path.isfile(standin_path):
+        raise LeftOut("not a regular file")
+    record(pack, standin_path)
+
+
 def main(argv):
     if "--help" in argv or "-h" in argv:
         print(__doc__)
+        return 0
+    if "--record-only" in argv:
+        args = [a for a in argv if not a.startswith("--")]
+        if "--pack" not in argv or len(args) != 2:
+            print("standin: --record-only needs <stand-in-file> --pack <pack-folder>", file=sys.stderr)
+            return 2
+        pack = argv[argv.index("--pack") + 1]
+        target = [a for a in args if a != pack]
+        if len(target) != 1:
+            print("standin: --record-only needs <stand-in-file> --pack <pack-folder>", file=sys.stderr)
+            return 2
+        try:
+            record_edited(pack, target[0])
+        except LeftOut as e:
+            print(f"not recorded: {e}")
+            return 1
+        print(f"re-recorded edited stand-in: {target[0]} (tell the owner which rows were added by hand)")
         return 0
     args = [a for a in argv if not a.startswith("--")]
     rows, pack = 8, None

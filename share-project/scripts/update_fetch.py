@@ -13,7 +13,8 @@ The release comes from the fixed repository below (GitHub releases, asset
 share-project-v<version>.zip). The zip is checked before anything is unpacked: one top
 folder named share-project, relative paths only, no links, no nested archives, size limits.
 It is unpacked into a new staging folder (default: a new folder in the system temporary
-area), never into a project. The output lists added, removed and changed files against the
+area), never into a project, and the exact zip is saved there as share-project-release.zip
+for an app that installs skills from a zip. The output lists added, removed and changed files against the
 installed copy, the release number inside the zip, and the zip's SHA-256.
 Exit 0 = staged; 1 = refused (reason printed); 2 = usage or network error."""
 
@@ -113,6 +114,9 @@ def stage(data, staging):
         os.makedirs(os.path.dirname(out), exist_ok=True)
         with open(out, "wb") as f:
             f.write(z.read(i))
+    # Keep the exact checked bytes beside the unpacked folder: a desktop app installs from a zip.
+    with open(os.path.join(staging, f"{SKILL}-release.zip"), "wb") as f:
+        f.write(data)
     return os.path.join(staging, SKILL), []
 
 
@@ -181,6 +185,8 @@ def main(argv):
         new_version = "unknown"
     diff = compare(new_root)
     print(f"Staged, not installed: {new_root}")
+    print(f"Zip saved for an app's own install (same bytes as the fingerprint below): "
+          f"{os.path.join(os.path.dirname(new_root), SKILL + '-release.zip')}")
     print(f"From: {source}")
     print(f"Release inside the zip: {new_version} (installed: {installed_version()})")
     print(f"SHA-256 of the downloaded zip: {hashlib.sha256(data).hexdigest()}")

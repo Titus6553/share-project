@@ -31,6 +31,15 @@ class BuildZip(unittest.TestCase):
         self.assertTrue(build_zip.build(pack, out))
         self.assertFalse(os.path.exists(out))
 
+    def test_refuses_key_shaped_pack_folder_name(self):
+        # End review: the folder name goes into every entry but was never screened.
+        pack = make_pack(self)
+        renamed = os.path.join(os.path.dirname(pack), "tok_7Rj2Kx9Wq4Lz8Pm3")
+        os.rename(pack, renamed)
+        out = os.path.join(tempdir(self), "pack.zip")
+        self.assertTrue(build_zip.build(renamed, out))
+        self.assertFalse(os.path.exists(out))
+
     def test_refuses_message_with_personal_data(self):
         pack = make_pack(self)
         msg = os.path.join(tempdir(self), "message.txt")

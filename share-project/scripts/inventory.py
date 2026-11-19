@@ -46,6 +46,8 @@ ARCHIVE_EXT = {".zip", ".tar", ".gz", ".tgz", ".bz2", ".xz", ".7z", ".rar", ".ja
 MEDIA_EXT = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".ico", ".tif", ".tiff", ".heic", ".pdf",
              ".mp4", ".mov", ".mp3", ".wav", ".woff", ".woff2", ".ttf", ".otf", ".eot", ".psd", ".ai"}
 DATA_DIR_HINT = re.compile(r"(^|/)(data|exports?|backups?|dumps?|uploads|fixtures|seeds?)(/|$)", re.I)
+CONFIG_JSON = re.compile(r"^(package(-lock)?|tsconfig.*|jsconfig|composer|deno|angular|vercel|firebase|app|"
+                         r"\.eslintrc|\.prettierrc|\.babelrc)\.json$", re.I)
 ENV_LINE = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_.-]*)\s*[=:]")
 
 
@@ -61,6 +63,25 @@ def env_names(path):
     except OSError:
         return None
     return names
+
+
+def json_has_rows(full, depth=0, node=None):
+    """True when a JSON file holds records: a list of 3 or more objects anywhere in its first levels."""
+    if node is None:
+        try:
+            with open(full, "rb") as f:
+                node = json.loads(f.read().decode("utf-8", "replace"))
+        except (OSError, ValueError):
+            return False  # not plain JSON: copied as text and screened like any other file
+    if depth > 4:
+        return False
+    if isinstance(node, list):
+        if sum(isinstance(x, dict) for x in node) >= 3:
+            return True
+        return any(json_has_rows(full, depth + 1, x) for x in node[:50] if isinstance(x, (list, dict)))
+    if isinstance(node, dict):
+        return any(json_has_rows(full, depth + 1, x) for x in list(node.values())[:200] if isinstance(x, (list, dict)))
+    return False
 
 
 def classify(rel, full):
@@ -93,6 +114,8 @@ def classify(rel, full):
         return "left-out", "unreadable"
     if ext == ".json" and (DATA_DIR_HINT.search(rel) or size > 256 * 1024):
         return "data", "JSON data file"
+    if ext == ".json" and not CONFIG_JSON.match(name) and json_has_rows(full):
+        return "data", "JSON holding records (rows of data)"
     if size > MAX_BYTES:
         return "left-out", "larger than 1 MiB (too large to check)"
     try:

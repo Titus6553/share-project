@@ -33,6 +33,9 @@ class ScreenSamples(unittest.TestCase):
         text = ('API_KEY = "{{API_KEY}}"\ntoken = os.environ["TOKEN"]\nurl = "https://{{USER}}:{{PASS}}@host/x"\n'
                 "standin-3@example.invalid, 000-555-0112\n")
         self.assertEqual(screen.screen_text(text), [])
+        # End review: the exemption once blanked a whole token, hiding a real value next to a stand-in.
+        self.assertTrue(screen.screen_text("standin-1,alice.moreno@dealer.example.net"))
+        self.assertTrue(screen.screen_text("password=standin-hunter2xyz"))
 
     def test_card_numbers_need_the_checksum(self):
         self.assertTrue(screen.screen_text("card 5425 2334 3010 9903"))

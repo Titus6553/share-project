@@ -45,6 +45,9 @@ class UpdateFetch(unittest.TestCase):
         root, problems = update_fetch.stage(zip_bytes(GOOD), staging)
         self.assertEqual(problems, [])
         self.assertTrue(os.path.isfile(os.path.join(root, "SKILL.md")))
+        # End review: the checked zip was not kept, so a desktop app had nothing to install from.
+        with open(os.path.join(staging, "share-project-release.zip"), "rb") as f:
+            self.assertEqual(f.read(), zip_bytes(GOOD))
         self.assertEqual(update_fetch.tree(update_fetch.HERE), before)
 
 

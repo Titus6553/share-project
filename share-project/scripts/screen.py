@@ -24,6 +24,8 @@ import zipfile
 
 MAX_BYTES = 1024 * 1024
 STANDIN_MARK = "standin-"
+# Exactly the values standin.py generates: "standin-<column>-<n>" and "standin-<n>@example.invalid".
+STANDIN_VALUE = re.compile(r"(?<![\w@.-])standin-(?:[a-z0-9-]{1,64}-)?\d{1,4}(?:@example\.invalid)?(?![\w@.-])")
 
 PLACEHOLDER = re.compile(r"^(\{\{[A-Z0-9_]+\}\}|\$\{?[A-Z0-9_]+\}?|<[A-Za-z0-9_ -]+>|os\.environ.*|process\.env.*|getenv.*|"
                          r"env\(.*|x+|\*+|changeme|your[_-].*|example.*|none|null|true|false|\"\"|'')$", re.I)
@@ -68,8 +70,10 @@ def screen_text(text):
     """Return [(line, column, kind)] for one text. Values are not returned."""
     hits = []
     for ln, line in enumerate(text.splitlines(), start=1):
-        if STANDIN_MARK in line and not any(p.search(line) for _, p in SECRET_PATTERNS):
-            line = re.sub(r"\S*" + STANDIN_MARK + r"\S*", " ", line)
+        if STANDIN_MARK in line:
+            # Blank only the generated stand-in values themselves, same length, so columns stay true
+            # and anything next to them (another field, an assignment) is still screened.
+            line = STANDIN_VALUE.sub(lambda m: " " * len(m.group(0)), line)
         for kind, pat in SECRET_PATTERNS:
             for m in pat.finditer(line):
                 if not PLACEHOLDER.match(m.group(0)) and not ("{{" in m.group(0) and "}}" in m.group(0)):

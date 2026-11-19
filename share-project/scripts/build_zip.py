@@ -20,7 +20,7 @@ import zipfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from check_pack import check  # noqa: E402
-from screen import screen_paths  # noqa: E402
+from screen import name_hits, screen_paths  # noqa: E402
 
 
 def build(pack, out, message=None):
@@ -36,6 +36,11 @@ def build(pack, out, message=None):
         if m["findings"] or m["not_checked"]:
             return ["the delivery message has screening findings; rewrite it without keys or personal details"]
     top = os.path.basename(pack.rstrip(os.sep))
+    # The pack folder's own name goes into every entry, and the zip's name travels with it:
+    # neither may itself be a secret value or an id number.
+    for label, name in (("pack folder", top), ("zip", os.path.basename(out))):
+        if name_hits(name):
+            return [f"the {label} name looks like a key or id number; rename it"]
     expected = {}
     for base, dirs, files in os.walk(pack, followlinks=False):
         dirs.sort()
@@ -65,6 +70,8 @@ def build(pack, out, message=None):
             n = info.filename
             if n.startswith("/") or ".." in n.split("/") or "\\" in n:
                 errors.append(f"unsafe entry path: {n}")
+            if name_hits(n):
+                errors.append(f"entry name looks like a key or id number: {n}")
             if (info.external_attr >> 16) & 0o170000 != 0o100000:
                 errors.append(f"not a regular file entry: {n}")
             if info.extra:
