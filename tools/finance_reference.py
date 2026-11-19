@@ -48,9 +48,17 @@ def read_xlsx(path):
                         node = c.find("m:v", NS)
                         v = None if node is None else node.text
                     vals[col] = v
-                rows.append([vals[k] for k in sorted(vals, key=lambda k: (len(k), k))])
+                width = max((_ci(k) for k in vals), default=-1) + 1
+                rows.append([next((vals[k] for k in vals if _ci(k) == i), None) for i in range(width)])
             out[sh.get("name")] = rows
         return out
+
+
+def _ci(col):
+    n = 0
+    for ch in col:
+        n = n * 26 + ord(ch) - 64
+    return n - 1
 
 
 def money(d):
@@ -65,6 +73,7 @@ def compute(path, as_built=False):
     for r in deals:
         month = (r[idx["delivered_on"]] or r[idx["contract_on"]])[:7]
         dept = r[idx["department"]]
+        r = r + [None] * (len(header) - len(r))
         recon = Decimal(r[idx["recon_cost"]] or "0")
         cost = Decimal(r[idx["cost"]]) + recon + (recon if as_built and dept == "Used" else 0)
         acc[(month, dept)]["revenue"] += Decimal(r[idx["sale_price"]])
