@@ -1,0 +1,3 @@
+.board{display:grid;grid-template-columns:repeat(6,1fr);gap:12px}
+.card{border-radius:6px;padding:8px;margin:6px 0;color:#fff}
+.card.green{background:#2da44e}.card.yellow{background:#bf8700}.card.red{background:#cf222e}

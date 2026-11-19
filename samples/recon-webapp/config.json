@@ -1,0 +1,7 @@
+{
+  "database": "data/recon.db",
+  "port": 8080,
+  "stages": ["Inspection", "Mechanical", "Body", "Detail", "Photos", "Frontline"],
+  "notify_url": "https://paging.dealer-group.example/v1/text",
+  "notify_token": "ntf_Bv8Qx3Lm6Rz1Wp9TkY2s"
+}

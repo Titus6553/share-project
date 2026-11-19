@@ -1,0 +1,11 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Monthly gross</title>
+<style>
+ body{font-family:Helvetica,Arial,sans-serif;margin:24px}
+ table{border-collapse:collapse} td,th{padding:4px 10px;border-bottom:1px solid #ddd;text-align:right}
+ .On.track{color:#1a7f37} .Watch{color:#9a6700} .Behind{color:#cf222e}
+</style></head>
+<body><h1>Monthly gross by department</h1>
+<table><tr><th>Month</th><th>Department</th><th>Revenue</th><th>Cost</th><th>Gross</th><th>Margin %</th><th>Status</th></tr>
+{% for r in rows %}<tr><td>{{ r.month }}</td><td>{{ r.department }}</td><td>${{ "{:,}".format(r.revenue) }}</td><td>${{ "{:,}".format(r.cost) }}</td><td>${{ "{:,}".format(r.gross) }}</td><td>{{ r.margin_pct }}</td><td class="{{ r.status }}">{{ r.status }}</td></tr>
+{% endfor %}</table></body></html>
