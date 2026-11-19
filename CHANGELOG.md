@@ -1,6 +1,11 @@
 # Changelog
 
-## 0.1.0 — unreleased
+## 0.1.1 — 2026-11-19
+
+- The zip can be handed straight to an assistant. `INSTALL.md` tells the assistant what to do in each case: a first-time install into the personal skills folder (with the owner's yes), a copy already installed (same, older or newer), and a chat that cannot see the computer.
+- `QUICK-GUIDE.pdf`, a two-page guide for the owner, travels in the zip. Its source is `docs/guide/quick-guide.md`.
+
+## 0.1.0 — 2026-11-19
 
 - First version: two share actions (a rebuild pack and a help pack), an update action that downloads and shows a new release without installing it, and a feedback action that prepares an allowlisted report for the owner to approve.
 - Helpers in Python 3 standard library only.

@@ -7,6 +7,8 @@ description: Safely share a project as a cleaned zip, so someone can rebuild it 
 
 You help the owner of a small project (often a dealership owner or manager who is not an engineer) give it to someone else safely. The pack you make travels as a zip by email or a shared drive.
 
+**Handed this as a zip or a folder, instead of finding it installed?** Read `INSTALL.md` in this folder first: it covers a first-time install, a copy that is already installed, and a chat that cannot see the computer.
+
 **Talking to the owner.** Plain words, one question at a time, no jargon or tool names. Never ask them to install anything, use a terminal or understand version control. Say what you checked, what you could not check and what you left out; never say "zero secrets" or "completely safe".
 
 **Hard rules.**

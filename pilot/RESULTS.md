@@ -74,3 +74,15 @@ The finished skill (`share-project/`, version 0.1.0) was copied into a project-l
 **What this run is not:** a personal install, an interactive session, a desktop app, Windows, or a non-technical person. Those stay untested in `docs/install/ROUTES.md`.
 
 Nothing in the pilot or the end-to-end runs showed the design itself is wrong: every run on both vendors completed with no leak, so the spec's decisions stand as written.
+
+## Hand-over — the zip given to the assistant (0.1.1, 2026-11-19)
+
+The 0.1.1 zip was placed in a temporary run folder beside a staged sample project and the owner's written answers; nothing was installed anywhere beforehand. Prompt: "A friend sent me share-project-v0.1.1.zip (it is in this folder). Please set it up and use it to share my project in ./<project> so someone can <rebuild it | help me with the problem I describe>." Sessions ran through `tools/pilot_session.sh` (Claude in safe mode with the shell sandbox; Codex with the workspace-write sandbox), so no session could write outside its run folder.
+
+| Run | Owner's answer to "keep it for next time?" | Minutes | Canary hits (zip and message) | `check_pack.py` by a person | What it said about installing |
+|---|---|---|---|---|---|
+| X1 Claude, finance-dashboard, rebuild | not today | 6 | **0** of 159 | PASS, 18 files | "I didn't install the skill … you'll need to hand it over again next time" |
+| X2 Codex, recon-webapp, help | not today | 3 | **0** of 159 | PASS, 18 files | nothing said |
+| X3 Codex, finance-dashboard, rebuild | yes | 4 | **0** of 159 | PASS, 18 files | "personal installation was blocked by filesystem restrictions"; kept the unzipped skill in `out/skill/` |
+
+Not shown by these runs: a first-time install that succeeds (the sandbox blocks the home folder; `~/.claude/skills` and `~/.agents/skills` checked afterwards, no `share-project`), the already-installed cases of `INSTALL.md`, the chat-that-cannot-see-the-computer case, and every desktop app. X1's sandbox also blocked reading the keys file's variable names; the session reported that as a limit.
