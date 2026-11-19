@@ -66,7 +66,8 @@ def env_names(path):
 
 
 def json_has_rows(full, depth=0, node=None):
-    """True when a JSON file holds records: a list of 3 or more objects anywhere in its first levels."""
+    """True when a JSON file holds records: a list with any object in it, anywhere in its first levels.
+    Settings rarely hold lists of objects; exports nearly always do, even with one or two rows."""
     if node is None:
         try:
             with open(full, "rb") as f:
@@ -76,7 +77,7 @@ def json_has_rows(full, depth=0, node=None):
     if depth > 4:
         return False
     if isinstance(node, list):
-        if sum(isinstance(x, dict) for x in node) >= 3:
+        if any(isinstance(x, dict) for x in node):
             return True
         return any(json_has_rows(full, depth + 1, x) for x in node[:50] if isinstance(x, (list, dict)))
     if isinstance(node, dict):

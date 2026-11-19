@@ -32,6 +32,7 @@ import random
 import re
 import sqlite3
 import sys
+import tempfile
 import zipfile
 from xml.etree import ElementTree as ET
 from xml.sax.saxutils import escape
@@ -41,8 +42,6 @@ PERSONAL_HINT = re.compile(
     r"advisor|tech|manager|user|email|e-mail|phone|mobile|cell|fax|address|street|city|zip|postal|ssn|social|"
     r"dob|birth|licen[cs]e|vin|plate|account|card|iban|routing|pay|salary|wage|income|tax_?id|ip_?addr|note|comment",
     re.I)
-CATEGORY_HINT = re.compile(r"stage|status|state|step|department|dept|category|type|kind|class|group|make|model|"
-                           r"trim|color|colour|segment|channel|source|level|tier|region|location|store|lot", re.I)
 DATE = re.compile(r"^\d{4}-\d{2}-\d{2}([ T]\d{2}:\d{2}(:\d{2})?)?$")
 NUM = re.compile(r"^-?\d+(\.\d+)?$")
 PERSON = re.compile(r"^[A-Z][a-z'\u00e0-\u00ff-]+( [A-Z][a-z'\u00e0-\u00ff-]+){1,3}$")
@@ -72,10 +71,9 @@ def profile(name, values):
     vals = [v for v in values if v not in (None, "")]
     blanks = len(values) - len(vals)
     texts = [str(v) for v in vals]
-    # Person-shaped values ("Ada Moreno") make a column personal however often they repeat, unless the
-    # column name says it holds categories (a stage called "Front Line" is a label, not a person).
-    looks_like_names = (len(texts) >= 2 and sum(bool(PERSON.match(t)) for t in texts) >= 0.8 * len(texts)
-                        and not CATEGORY_HINT.search(name or ""))
+    # Person-shaped values ("Ada Moreno") make a column personal however often they repeat and whatever
+    # the column is called; such a column's values are never kept as labels.
+    looks_like_names = len(texts) >= 2 and sum(bool(PERSON.match(t)) for t in texts) >= 0.8 * len(texts)
     p = {"name": name, "blanks": blanks > 0, "personal": bool(PERSONAL_HINT.search(name or "")) or looks_like_names}
     if not texts:
         p["type"] = "text"
@@ -366,9 +364,9 @@ def make(src, dst, rows=8, seed=None):
     os.makedirs(os.path.dirname(os.path.abspath(dst)), exist_ok=True)
     # Written to a temporary file beside the destination and moved into place only when complete,
     # so a refusal never removes or half-writes a file that was there before.
-    tmp = os.path.join(os.path.dirname(os.path.abspath(dst)), "." + os.path.basename(dst) + ".partial")
-    if os.path.lexists(tmp):
-        os.remove(tmp)
+    fd, tmp = tempfile.mkstemp(prefix="." + os.path.basename(dst) + ".", suffix=".partial",
+                               dir=os.path.dirname(os.path.abspath(dst)))
+    os.close(fd)  # an empty file reserved for this run; each maker writes over it
     try:
         rep = makers[ext](src, tmp, rows, rng)
         os.replace(tmp, dst)
@@ -385,7 +383,7 @@ def make(src, dst, rows=8, seed=None):
             "labels_kept": kept, "personal_columns": personal}
 
 
-def record(pack, standin_path):
+def record(pack, standin_path, allowed=None):
     import hashlib
     rec = os.path.join(pack, "STANDINS.json")
     data = {"standins": []}
@@ -395,25 +393,61 @@ def record(pack, standin_path):
     inner = os.path.relpath(os.path.abspath(standin_path), os.path.join(os.path.abspath(pack), "project"))
     with open(standin_path, "rb") as f:
         digest = hashlib.sha256(f.read()).hexdigest()
-    data["standins"] = [e for e in data["standins"] if e["path"] != inner] + [{"path": inner, "sha256": digest}]
+    prev = next((e for e in data["standins"] if e.get("path") == inner), {})
+    entry = {"path": inner, "sha256": digest,
+             "kept_labels": sorted(allowed) if allowed is not None else prev.get("kept_labels", [])}
+    data["standins"] = [e for e in data["standins"] if e.get("path") != inner] + [entry]
     with open(rec, "w") as f:
         json.dump(data, f, indent=1)
 
 
+INVENTED_TEXT = re.compile(r"^(standin-(?:[a-z0-9-]{1,64}-)?\d{1,4}(?:@example\.invalid)?|000-555-01\d\d|"
+                           r"-?\d+(\.\d+)?|\d{4}-\d{2}(-\d{2}([ T]\d{2}:\d{2}(:\d{2})?)?)?)$")
+
+
+def text_cells(path):
+    """Every text value in a stand-in file's rows (headings excluded)."""
+    ext = os.path.splitext(path)[1].lower()
+    if ext in (".csv", ".tsv"):
+        with open(path, newline="", encoding="utf-8", errors="strict") as f:
+            rows = list(csv.reader(f, delimiter="\t" if ext == ".tsv" else ","))[1:]
+        return [v for r in rows for v in r]
+    if ext in (".xlsx", ".xlsm"):
+        return [v for _, rows in read_xlsx(path) for r in rows[1:] for v in r if isinstance(v, str)]
+    con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+    try:
+        out = []
+        for (name,) in con.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"):
+            for row in con.execute(f'SELECT * FROM "{name}"'):
+                out.extend(v for v in row if isinstance(v, str))
+        return out
+    finally:
+        con.close()
+
+
 def record_edited(pack, standin_path):
     """Re-record a stand-in edited after standin.py made it (for example, check rows added).
-    Only a file already recorded in STANDINS.json can be re-recorded; nothing is regenerated."""
+    The file must already be recorded, and every text value in it must be an invented shape
+    (standin-..., a .invalid email, a 000 phone, a number or date) or a label kept when it was made.
+    Nothing is regenerated."""
     rec = os.path.join(pack, "STANDINS.json")
     inner = os.path.relpath(os.path.abspath(standin_path), os.path.join(os.path.abspath(pack), "project"))
     try:
         with open(rec) as f:
-            known = {e["path"] for e in json.load(f).get("standins", [])}
-    except (OSError, ValueError, KeyError, TypeError):
-        known = set()
-    if inner not in known:
+            entry = next(e for e in json.load(f).get("standins", []) if e.get("path") == inner and e.get("sha256"))
+    except (OSError, ValueError, TypeError, StopIteration, AttributeError):
         raise LeftOut("only a stand-in that standin.py made and recorded can be re-recorded")
     if os.path.islink(standin_path) or not os.path.isfile(standin_path):
         raise LeftOut("not a regular file")
+    kept = set(entry.get("kept_labels") or [])
+    try:
+        cells = text_cells(standin_path)
+    except (OSError, UnicodeDecodeError, csv.Error, zipfile.BadZipFile, KeyError, ET.ParseError, ValueError,
+            sqlite3.DatabaseError) as e:
+        raise LeftOut(f"could not read it ({e.__class__.__name__})")
+    if sum(1 for v in cells if v and v not in kept and not INVENTED_TEXT.match(v.strip())):
+        raise LeftOut("it holds text that is not an invented value or a kept label; "
+                      "added rows must use the same invented shapes (standin-..., .invalid emails, 000 phones)")
     record(pack, standin_path)
 
 
@@ -467,7 +501,8 @@ def main(argv):
         print(json.dumps({"left_out": args[0], "reason": str(e)}) if "--json" in argv else f"left out: {e}")
         return 1
     if pack:
-        record(pack, args[1])
+        record(pack, args[1], allowed={v for g in (res["structure"].get("sheets") or res["structure"].get("tables") or [])
+                                       for c in g["columns"] for v in c.get("labels", [])})
     if "--json" in argv:
         print(json.dumps(res, indent=1, default=str))
     else:

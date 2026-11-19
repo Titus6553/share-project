@@ -27,7 +27,7 @@ class InventorySamples(unittest.TestCase):
         # End review: a small exported JSON of rows at the project root was classed as code and copied.
         rows = os.path.join(self.project, "sales.json")
         with open(rows, "w") as f:
-            json.dump([{"customer": "Ada Moreno", "amount": n} for n in range(3)], f)
+            json.dump({"rows": [{"customer": "Ada Moreno", "amount": 1}]}, f)  # follow-up: one record is enough
         self.assertEqual(inventory.classify("sales.json", rows)[0], "data")
         settings = os.path.join(self.project, "settings.json")
         with open(settings, "w") as f:

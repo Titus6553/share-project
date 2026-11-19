@@ -66,11 +66,11 @@ class StandIns(unittest.TestCase):
         # End review: two names repeated twice each passed as category labels and were copied.
         src, dst = os.path.join(self.out, "a.csv"), os.path.join(self.out, "a-out.csv")
         with open(src, "w") as f:
-            f.write("assigned_to,stage\nAda Moreno,Front Line\nAda Moreno,Front Line\nLuis Ortega,Body\nLuis Ortega,Body\n")
+            f.write("lot_attendant,stage\nAda Moreno,Body\nAda Moreno,Body\nLuis Ortega,Detail\nLuis Ortega,Detail\n")
         res = standin.make(src, dst)
         with open(dst) as f:
             text = f.read()
-        self.assertNotIn("Ada Moreno", text)
+        self.assertNotIn("Ada Moreno", text)  # follow-up: a category-like column name ("lot") no longer overrides
         self.assertNotIn("Luis Ortega", text)
         self.assertIn("a.csv.stage", res["labels_kept"])
 
@@ -87,6 +87,13 @@ class StandIns(unittest.TestCase):
         with open(dst, "rb") as f:
             self.assertEqual(f.read(), b"earlier output")
         self.assertEqual(sorted(os.listdir(self.out)), ["bad.db", "r.db"])
+        # Follow-up: a file that merely shares the temporary name pattern is not this run's to delete.
+        bystander = os.path.join(self.out, ".r.db.partial")
+        with open(bystander, "w") as f:
+            f.write("someone else's")
+        with self.assertRaises(standin.LeftOut):
+            standin.make(bad, dst)
+        self.assertTrue(os.path.exists(bystander))
 
     def test_record_only_keeps_edited_rows(self):
         # End review: re-running with --pack regenerated the stand-in and lost hand-added check rows.
@@ -107,6 +114,13 @@ class StandIns(unittest.TestCase):
         with open(stray, "wb") as f:
             f.write(b"x")
         self.assertEqual(standin.main([stray, "--record-only", "--pack", pack]), 1)
+        # Follow-up: real text written into a recorded stand-in (or a real file under its name) is refused.
+        con = sqlite3.connect(dst)
+        con.execute(f'UPDATE "{table}" SET "{con.execute(f"PRAGMA table_info({table!r})").fetchall()[1][1]}" = ?',
+                    ("Ada Moreno",))
+        con.commit()
+        con.close()
+        self.assertEqual(standin.main([dst, "--record-only", "--pack", pack]), 1)
 
     def test_unsupported_is_left_out(self):
         src = os.path.join(ROOT, "samples", "finance-dashboard", "data", "old_exports.zip")
